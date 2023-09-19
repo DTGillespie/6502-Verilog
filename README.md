@@ -1,0 +1,2 @@
+## Summary
+6502 Verilog HDL Synthesis following the [MOS MCS6500 Family Architecture](http://archive.6502.org/books/mcs6500_family_hardware_manual.pdf). This is an ongoing project and currently the Timing/Control Unit is the only partially implemented module.
