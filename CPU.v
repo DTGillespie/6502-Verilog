@@ -1,20 +1,34 @@
 `timescale 1ns / 1ps
+module CpuCore(
+);
 
-module CU(
+// 1Mhz Clock Generator
+wire clk;
+ClockGenerator clk_sim(
+	.clk_pulse(clk)
+);
+
+ControlUnit cu(
+	.clk(clk)
+);
+
+endmodule
+
+module ControlUnit(
     input wire clk,
     input wire reset,
     input wire opcode,
     input wire [1:0] addr_mode,
-	 input wire [15:0] current_pc,
-	 output wire [15:0] next_pc,
-	 output wire [7:0] pcl,
-	 output wire [7:0] pch,
+	input wire [15:0] current_pc,
+	output wire [15:0] next_pc,
+	output wire [7:0] pcl,
+	output wire [7:0] pch,
     output wire read,
     output wire write,
     output wire enable
 );
 
-// Define TCU States
+// Define CU States
 parameter IDLE = 2'b00;
 parameter FETCH = 2'b01;
 parameter DECODE = 2'b10;
@@ -22,7 +36,7 @@ parameter EXECUTE = 2'b11;
 
 reg [1:0] state; // TCU State Register
 
-// Define TCU Control Signals (Memory Access Signals)
+// Define CU Control Signals (Memory Access Signals)
 reg read_reg; 	// Read
 reg write_reg;  // Write
 reg enable_reg; // Enable
@@ -30,7 +44,7 @@ reg enable_reg; // Enable
 // Program Counter
 reg [15:0] pc;
 
-// Rising Edge Utility - Architecture Deviation
+// Rising Edge Utility
 wire clk_rising_edge;
 RisingEdgeDetector detector (
   .clk(clk),
@@ -38,7 +52,7 @@ RisingEdgeDetector detector (
   .rising_edge(clk_rising_edge)
 );
 
-// TCU Finite State Machine
+// CU Finite State Machine
 always @(posedge clk or posedge reset) begin
 	if (reset) begin
 		// Initialize TCU On Reset
@@ -98,6 +112,23 @@ assign pch = pc[15:8];
 
 endmodule
 
+// ********** Utilities/Misc **********
+
+// 1Mhz Clock Generator -- Simulation Only
+module ClockGenerator(
+	output wire clk_pulse
+);
+
+reg clk_state = 1'b0;
+
+always begin
+	#1 clk_state = ~clk_state;
+end
+
+assign clk_pulse = clk_state;
+
+endmodule
+	
 // Rising Edge Detection Utility
 module RisingEdgeDetector (
 	input wire clk,
