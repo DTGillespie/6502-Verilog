@@ -1,39 +1,38 @@
-`timescale 1ns / 1ps
-
 // ********** CMOS 6502 **********
 
 module CpuCore(
+	input clock,
+	input reset,
+	output reg reset_indicator
 );
 
-wire clock;
 wire [15:0] address_bus;
 wire [7:0] data_bus;
 
-ClockGenerator oscil(
-	.clk_pulse_out(clock)
+wire clock_1MHz;
+ClockDivider clk_div(
+	.clk_in(clock),
+	.clk_out(clock_1MHz)
 );
 
-reg reset;
 ControlUnit cu(
 	.reset(reset),
-	.clk_in(clock),
+	.clk_in(clock_1MHz),
 	.data_bus_in(data_bus),
 	.addr_bus_out(address_bus)
 );
+
 
 ROM rom (
 	.addr_bus_in(address_bus),
 	.data_bus_out(data_bus)
 );
 
-reg cycle = 2'b00;
-initial begin
-	reset = 1'b1;
-end
-
 always @(*) begin
-	if (cycle == 2'b10) begin
-		
+	if (reset) begin
+		reset_indicator = 1'b1;
+	end else begin
+		reset_indicator = 1'b0;
 	end
 end
 
@@ -156,21 +155,29 @@ endmodule
 
 // ********** Utilities/Misc **********
 
-// 1MHz Clock Generator
-module ClockGenerator(
-	output wire clk_pulse_out
+// 1MHz Clock Divider
+module ClockDivider (
+	input wire clk_in,
+	output reg clk_out
 );
 
-reg clk_state = 1'b0;
+reg [24:0] counter;
 
-always begin
-	#1 clk_state = ~clk_state;
+initial begin
+	clk_out = 1'b0;
 end
 
-assign clk_pulse_out = clk_state;
+always @(posedge clk_in) begin
+	if (counter == 25'h1FFFFF) begin
+		counter = 0;
+		clk_out = ~clk_out;
+	end else begin
+		counter = counter + 1;
+	end
+end
 
 endmodule
-	
+
 // Rising Edge Detector
 module RisingEdgeDetector (
 	input wire clk,

@@ -1,0 +1,4 @@
+NET clock LOC=P54;
+NET reset LOC=P69;
+NET reset_indicator LOC=P15;
+	
