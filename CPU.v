@@ -1,38 +1,28 @@
-// ********** CMOS 6502 **********
-
-module CpuCore(
-	input debug_mode,
-	input debug_step,
-	input clock,
-	input reset,
-	output reg reset_indicator,
-	output reg debug_mode_indicator,
-	output reg debug_step_indicator,
-	output seg_select,
-	output seg
-);
-
-
-// Segmented LED Display 
-SegmentedDisplayEncoder sde (
-	.sys_clk_in(clock),
-	.seg_select_out(seg_select),
-	.seg_out(seg)
+module 6502_System_Wrapper (
+	input clk,
+	input btn0,     // Reset
+	input sw0, 		// Manual clock mode
+	input btn3, 	// Step clock
+	output reg ld0, // Reset indicator
+	output reg ld1, // Step clock indicator 
+	output reg ld2, // Manual clock mode indicator
+	output ca, cb, cc, cd, ce, cf, cg, dp, // 7 segmented display cathodes + decimal point
+	output aa, ab, ac, ad // Digit select anodes
 );
 
 wire [15:0] address_bus;
 wire [7:0] data_bus;
 
 wire clock_1MHz;
-ClockDivider clk_div(
+ClockDivider_1MHz clk_div(
 	.clk_in(clock),
 	.clk_out(clock_1MHz)
 );
 
 ControlUnit cu(
-	.debug_mode(debug_mode),
-	.debug_step(debug_step),
-	.reset(reset),
+	.sw0(sw0),
+	.btn3(btn3),
+	.reset(btn0),
 	.clk_in(clock_1MHz),
 	.data_bus_in(data_bus),
 	.addr_bus_out(address_bus)
@@ -46,40 +36,42 @@ ROM rom (
 always @(*) begin
 
 	if (reset) begin
-		reset_indicator = 1'b1;
+		ld0 <= 1'b1;
 	end else begin
-		reset_indicator = 1'b0;
+		ld0 <= 1'b0;
 	end
 	
-	if (debug_mode) begin
-		debug_mode_indicator = 1'b1;
+	if (sw0) begin
+		ld2 <= 1'b1;
 	end else begin
-		debug_mode_indicator = 1'b0;
+		ld2 <= 1'b0;
 	end
 	
-	if (debug_step) begin
-		debug_step_indicator = 1'b1;
+	if (btn3) begin
+		ld1 <= 1'b1;
 	end else begin
-		debug_step_indicator = 1'b0;
+		ld1 <= 1'b0;
 	end
 	
 end
 
+assign {ca, cb, cc, cd, ce, cf, cg, dp} = seg_a;
+
 endmodule
 
 module ControlUnit(
-	input wire debug_mode,
-	input wire debug_step,
+	input wire sw0,
+	input wire btn3,
 	input wire reset,
-   input wire clk_in,
+	input wire clk_in,
 	input wire [7:0] data_bus_in,
 	output wire [15:0] addr_bus_out
 );
 
-parameter IDLE = 2'b00;
-parameter FETCH = 2'b01;
-parameter DECODE = 2'b10;
-parameter EXECUTE = 2'b11;
+parameter IDLE <= 2'b00;
+parameter FETCH <= 2'b01;
+parameter DECODE <= 2'b10;
+parameter EXECUTE <= 2'b11;
 
 reg clk_internal;
 
@@ -92,79 +84,9 @@ reg enable;
 reg [15:0] pc;
 reg [7:0] pcl;
 reg [7:0] pch;
-//reg [15:0] current_pc;
-//reg [15:0] next_pc;
 
 reg [7:0] opcode;
 reg [1:0] addr_mode;
-
-task PrepFetch (
-	input clk_in,
-	output state_out,
-	output read_out,
-	output write_out,
-	output enable_out,
-	output pc_out
-);
-	begin
-		// Wait For Rising Edge Of Clock
-		if (clk_in) begin
-			// Transition To State => FETCH
-			state_out = FETCH;
-			// Control Fetch Instruction Signals
-			read_out = 1'b1;   // Enable reading from memory (ROM)
-			write_out = 1'b0;  // Disable writing to memory
-			enable_out = 1'b1; // Enable memory operation
-			pc_out = 16'h0000; // Initialize program counter to 0x0000
-		end
-	end
-endtask
-
-task Fetch (
-	output state_out,
-	output read_out,
-	output write_out,
-	output enable_out
-);
-	begin
-		// Transition To State => DECODE
-		state_out = DECODE;
-		// Control Decode Instruction Signals
-		read_out = 1'b0;
-		write_out = 1'b0;
-		enable_out = 1'b0;
-	end
-endtask
-
-task DecodeOp (
-	input opcode_in, 
-	input addr_mode_in, 
-	input pc_in,
-	output state_out, 
-	output reg pc_out
-);
-	begin
-		// Transition To State => EXECUTE (Based on opcode and addressing mode)
-		if (opcode_in == 6'b110000 && addr_mode_in == 2'b01) begin
-			// Example: Branch if equal instruction(opcode 110000, address mode: 01)
-			state_out = EXECUTE;
-			// IMPLEMENT BRANCH-INSTRUCTION LOGIC HERE
-		end else begin
-			// HANDLE OTHER OPCODES AND ADDRESSING MODES
-			pc_out = pc_in + 1; // Assuming Simple Update
-		end
-	end
-endtask
-
-task Execute (
-	output state_out
-);
-	begin
-		// Transition To State => IDLE
-		state = IDLE;
-		// IMPLEMENT 6502 LOGIC FOR RETURNING TO IDLE STATE
-	end
-endtask
 
 wire clk_rising_edge;
 RisingEdgeDetector detector (
@@ -175,55 +97,45 @@ RisingEdgeDetector detector (
 always @(posedge clk_in or posedge reset) begin
 	if (reset) begin
 		// Initialize CU On Reset
-		state = IDLE;
-		read = 1'b0;
-		write  = 1'b0;
-		enable = 1'b0;
+		state <= IDLE;
+		read <= 1'b0;
+		write <= 1'b0;
+		enable <= 1'b0;
 	end else begin 
 		// State Transition Logic
 		case(state)
 			IDLE: begin
-				PrepFetch(clk_rising_edge, state, read, write, enable, pc);
+				// Transition To State => FETCH
+				state <= FETCH;
+				// Control Fetch Instruction Signals
+				read <= 1'b1;   // Enable reading from memory (ROM)
+				write <= 1'b0;  // Disable writing to memory
+				enable <= 1'b1; // Enable memory operation
+				pc <= 16'h0000; // Initialize program counter to 0x0000
 			end
 			FETCH: begin
-				Fetch(state, read, write, enable);
+				// Transition To State => DECODE
+				state <= DECODE;
+				// Control Decode Instruction Signals
+				read <= 1'b0;
+				write <= 1'b0;
+				enable <= 1'b0;
 			end
 			DECODE: begin
-				DecodeOp(opcode, addr_mode, pc, state, pc);
+				// Transition To State => EXECUTE (Based on opcode and addressing mode)
+				if (opcode_in == 6'b110000 && addr_mode_in == 2'b01) begin
+					// Example: Branch if equal instruction(opcode 110000, address mode: 01)
+					state <= EXECUTE;
+					// IMPLEMENT BRANCH-INSTRUCTION LOGIC HERE
+				end else begin
+					// HANDLE OTHER OPCODES AND ADDRESSING MODES
+					pc <= pc_in + 1; // Assuming Simple Update
+				end
 			end
 			EXECUTE: begin
-				Execute(state);
-			end
-		endcase
-	end
-end
-
-// Manual Debugging
-wire debug_clk_rising_edge;
-RisingEdgeDetector debug_detector (
-	.clk(debug_step),
-	.clk_in(debug_step),
-   .rising_edge(debug_clk_rising_edge)
-);
-always @(posedge debug_step) begin
-	if (reset && debug_mode) begin
-		state = IDLE;
-		read = 1'b0;
-		write  = 1'b0;
-		enable = 1'b0;
-	end else begin 
-		case(state)
-			IDLE: begin
-				PrepFetch(debug_clk_rising_edge, state, read, write, enable, pc);
-			end
-			FETCH: begin
-				Fetch(state, read, write, enable);
-			end
-			DECODE: begin
-				DecodeOp(opcode, addr_mode, pc, state, pc);
-			end
-			EXECUTE: begin
-				Execute(state);
+				// Transition To State => IDLE
+				state <= IDLE;
+				// IMPLEMENT 6502 LOGIC FOR RETURNING TO IDLE STATE
 			end
 		endcase
 	end
@@ -246,8 +158,8 @@ integer i;
 
 initial begin
 
-	rom[16'h0000] = 8'hA0;
-	rom[16'h0001] = 8'hFF;
+	rom[16'h0000] <= 8'hA0;
+	rom[16'h0001] <= 8'hFF;
 
 end
 
@@ -257,44 +169,84 @@ endmodule
 
 // ********** Utilities/Misc **********
 
-// 7 Segment Display
 module SegmentedDisplayEncoder (
-	input wire sys_clk_in,
-	output reg seg_select_out,
-	output reg seg_out
+	input wire clk_in,
+	input wire [3:0] dgt,
+	output [7:0] reg c_out,
+	output [3:0] reg a_out
 );
 
-integer i;
+wire clk;
+ClockDivider_60Hz clk_div (
+	.clk_in(clk_in),
+	.clk_out(clk),
+);
 
-always @(posedge sys_clk_in) begin
-	seg_out = ~seg_out;
-	seg_select_out = 1'b1;
+always @(posedge clk) begin
+	case (dgt) 
+		// High = OFF | Low = ON
+		4'h0: c_out <= 7'b1000000;
+		4'h1: c_out <= 7'b1111001;
+		4'h2: c_out <= 7'b0100100;
+		4'h3: c_out <= 7'b0110000;
+		4'h4: c_out <= 7'b0011001;
+		4'h5: c_out <= 7'b0010010;
+		4'h6: c_out <= 7'b0000010;
+		4'h7: c_out <= 7'b1111000;
+		4'h8: c_out <= 7'b0000000;
+		4'h9: c_out <= 7'b0011000;
+		4'hA: c_out <= 7'b0000100;
+		4'hB: c_out <= 7'b0000011;
+		4'hC: c_out <= 7'b1000110;
+		4'hD: c_out <= 7'b0100001;
+		4'hE: c_out <= 7'b0000110;
+		4'hF: c_out <= 7'b0001110;
+		default : c_cout = 7'b1111111;
+	endcase
 end
 
 endmodule
 
-// 1MHz Clock Divider
-module ClockDivider (
+module ClockDivider_1MHz ( // From => 50MHz
 	input wire clk_in,
 	output reg clk_out
 );
 
-reg [24:0] counter;
+reg [24:0] cnt;
 
 initial begin
-	clk_out = 1'b0;
+	clk_out <= 1'b0;
 end
 
 always @(posedge clk_in) begin
-	if (counter == 25'h1FFFFF) begin
-		counter = 0;
+	if (cnt == 25'h1FFFFF) begin
+		cnt = 0;
 		clk_out = ~clk_out;
 	end else begin
-		counter = counter + 1;
+		cnt = cnt + 1;
 	end
 end
 
 endmodule
+
+module ClockDivider_60Hz ( // From => 1MHz
+	input wire clk_in,
+	output reg clk_out
+);
+
+reg [23:0] cnt;
+
+always @(posedge clk_in) begin
+	if (cnt == 24'h41A1A - 1) begin
+		cnt = 24'b0;
+		clk_out = ~clk_out;
+	end else begin
+		cnt = cnt + 1;
+	end
+end 
+
+endmodule
+
 
 // Rising Edge Detector
 module RisingEdgeDetector (
@@ -306,7 +258,7 @@ module RisingEdgeDetector (
 reg clk_prev;
 
 always @(posedge clk) begin
-	clk_prev = clk_in;
+	clk_prev <= clk_in;
 end
 
 assign rising_edge = (clk_in && !clk_prev);
