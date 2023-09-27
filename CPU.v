@@ -1,8 +1,8 @@
-module 6502_System_Wrapper (
+module System_Wrapper (
 	input clk,
 	input btn0,     // Reset
-	input sw0, 		// Manual clock mode
-	input btn3, 	// Step clock
+	input sw0, 		 // Manual clock mode
+	input btn3, 	 // Step clock
 	output reg ld0, // Reset indicator
 	output reg ld1, // Step clock indicator 
 	output reg ld2, // Manual clock mode indicator
@@ -10,15 +10,24 @@ module 6502_System_Wrapper (
 	output aa, ab, ac, ad // Digit select anodes
 );
 
-wire [15:0] address_bus;
-wire [7:0] data_bus;
+reg [3:0] test = 4'h1;
+reg [7:0] seg_c;
+reg [3:0] seg_a;
+SegmentedDisplayEncoder sde (
+	.clk_in(clk),
+	.dgt(test), // [3:0]
+	.c_out(seg_c),
+	.a_out(seg_a)
+);
 
 wire clock_1MHz;
 ClockDivider_1MHz clk_div(
 	.clk_in(clock),
 	.clk_out(clock_1MHz)
 );
-
+	
+wire [15:0] address_bus;
+wire [7:0] data_bus;
 ControlUnit cu(
 	.sw0(sw0),
 	.btn3(btn3),
@@ -35,7 +44,7 @@ ROM rom (
 
 always @(*) begin
 
-	if (reset) begin
+	if (btn0) begin
 		ld0 <= 1'b1;
 	end else begin
 		ld0 <= 1'b0;
@@ -55,7 +64,8 @@ always @(*) begin
 	
 end
 
-assign {ca, cb, cc, cd, ce, cf, cg, dp} = seg_a;
+assign {ca, cb, cc, cd, ce, cf, cg, dp} = seg_c;
+assign {aa, ab, ac, ad} = seg_a;
 
 endmodule
 
@@ -68,10 +78,10 @@ module ControlUnit(
 	output wire [15:0] addr_bus_out
 );
 
-parameter IDLE <= 2'b00;
-parameter FETCH <= 2'b01;
-parameter DECODE <= 2'b10;
-parameter EXECUTE <= 2'b11;
+parameter IDLE = 2'b00;
+parameter FETCH = 2'b01;
+parameter DECODE = 2'b10;
+parameter EXECUTE = 2'b11;
 
 reg clk_internal;
 
@@ -123,13 +133,13 @@ always @(posedge clk_in or posedge reset) begin
 			end
 			DECODE: begin
 				// Transition To State => EXECUTE (Based on opcode and addressing mode)
-				if (opcode_in == 6'b110000 && addr_mode_in == 2'b01) begin
+				if (opcode == 6'b110000 && addr_mode == 2'b01) begin
 					// Example: Branch if equal instruction(opcode 110000, address mode: 01)
 					state <= EXECUTE;
 					// IMPLEMENT BRANCH-INSTRUCTION LOGIC HERE
 				end else begin
 					// HANDLE OTHER OPCODES AND ADDRESSING MODES
-					pc <= pc_in + 1; // Assuming Simple Update
+					pc <= pc + 1; // Assuming Simple Update
 				end
 			end
 			EXECUTE: begin
@@ -172,38 +182,46 @@ endmodule
 module SegmentedDisplayEncoder (
 	input wire clk_in,
 	input wire [3:0] dgt,
-	output [7:0] reg c_out,
-	output [3:0] reg a_out
+	output wire [7:0] c_out,
+	output wire [3:0] a_out
 );
 
 wire clk;
 ClockDivider_60Hz clk_div (
 	.clk_in(clk_in),
-	.clk_out(clk),
+	.clk_out(clk)
 );
+
+reg [7:0] c;
+reg [3:0] a;
 
 always @(posedge clk) begin
 	case (dgt) 
 		// High = OFF | Low = ON
-		4'h0: c_out <= 7'b1000000;
-		4'h1: c_out <= 7'b1111001;
-		4'h2: c_out <= 7'b0100100;
-		4'h3: c_out <= 7'b0110000;
-		4'h4: c_out <= 7'b0011001;
-		4'h5: c_out <= 7'b0010010;
-		4'h6: c_out <= 7'b0000010;
-		4'h7: c_out <= 7'b1111000;
-		4'h8: c_out <= 7'b0000000;
-		4'h9: c_out <= 7'b0011000;
-		4'hA: c_out <= 7'b0000100;
-		4'hB: c_out <= 7'b0000011;
-		4'hC: c_out <= 7'b1000110;
-		4'hD: c_out <= 7'b0100001;
-		4'hE: c_out <= 7'b0000110;
-		4'hF: c_out <= 7'b0001110;
-		default : c_cout = 7'b1111111;
+		4'h0: c <= 7'b1000000;
+		4'h1: c <= 7'b1111001;
+		4'h2: c <= 7'b0100100;
+		4'h3: c <= 7'b0110000;
+		4'h4: c <= 7'b0011001;
+		4'h5: c <= 7'b0010010;
+		4'h6: c <= 7'b0000010;
+		4'h7: c <= 7'b1111000;
+		4'h8: c <= 7'b0000000;
+		4'h9: c <= 7'b0011000;
+		4'hA: c <= 7'b0000100;
+		4'hB: c <= 7'b0000011;
+		4'hC: c <= 7'b1000110;
+		4'hD: c <= 7'b0100001;
+		4'hE: c <= 7'b0000110;
+		4'hF: c <= 7'b0001110;
+		default : c = 7'b1111111;
 	endcase
+
+	a <= 4'b1110;
 end
+
+assign c_out = c;
+assign a_out = a;
 
 endmodule
 
@@ -246,7 +264,6 @@ always @(posedge clk_in) begin
 end 
 
 endmodule
-
 
 // Rising Edge Detector
 module RisingEdgeDetector (
