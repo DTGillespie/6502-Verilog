@@ -1,11 +1,11 @@
 module System_Wrapper (
 	input clk,
-	input btn0,     // Reset
-	input sw0, 		 // Manual clock mode
-	input btn3, 	 // Step clock
-	output reg ld0, // Reset indicator
+	input btnU,     // Reset
+	input sw0, 		  // Manual clock mode
+	input btnD, 	  // Step clock
+	output reg ld0, // Manual clock mode indicator
 	output reg ld1, // Step clock indicator 
-	output reg ld2, // Manual clock mode indicator
+	output reg ld2, // Reset indicator
 	output ca, cb, cc, cd, ce, cf, cg, dp, // 7 segmented display cathodes + decimal point
 	output aa, ab, ac, ad // Digit select anodes
 );
@@ -30,8 +30,8 @@ wire [15:0] address_bus;
 wire [7:0] data_bus;
 ControlUnit cu(
 	.sw0(sw0),
-	.btn3(btn3),
-	.reset(btn0),
+	.btnD(btnD),
+	.reset(btnU),
 	.clk_in(clock_1MHz),
 	.data_bus_in(data_bus),
 	.addr_bus_out(address_bus)
@@ -44,19 +44,19 @@ ROM rom (
 
 always @(*) begin
 
-	if (btn0) begin
-		ld0 <= 1'b1;
-	end else begin
-		ld0 <= 1'b0;
-	end
-	
-	if (sw0) begin
+	if (btnU) begin
 		ld2 <= 1'b1;
 	end else begin
 		ld2 <= 1'b0;
 	end
 	
-	if (btn3) begin
+	if (sw0) begin
+		ld0 <= 1'b1;
+	end else begin
+		ld0 <= 1'b0;
+	end
+	
+	if (btnD) begin
 		ld1 <= 1'b1;
 	end else begin
 		ld1 <= 1'b0;
@@ -71,7 +71,7 @@ endmodule
 
 module ControlUnit(
 	input wire sw0,
-	input wire btn3,
+	input wire btnD,
 	input wire reset,
 	input wire clk_in,
 	input wire [7:0] data_bus_in,
