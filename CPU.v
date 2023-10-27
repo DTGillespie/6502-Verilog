@@ -10,9 +10,9 @@ module System_Wrapper (
 	output aa, ab, ac, ad // Digit select anodes
 );
 
-reg [3:0] test = 4'h1;
-reg [7:0] seg_c;
-reg [3:0] seg_a;
+wire [3:0] test = 4'h1;
+wire [7:0] seg_c;
+wire [3:0] seg_a;
 SegmentedDisplayEncoder sde (
 	.clk_in(clk),
 	.dgt(test), // [3:0]
