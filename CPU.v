@@ -104,6 +104,7 @@ RisingEdgeDetector detector (
 	.clk_in(clk_in),
    .rising_edge(clk_rising_edge)
 );
+
 always @(posedge clk_in or posedge reset) begin
 	if (reset) begin
 		// Initialize CU On Reset
@@ -225,41 +226,40 @@ assign a_out = a;
 
 endmodule
 
-module ClockDivider_1MHz ( // From => 50MHz
-	input wire clk_in,
-	output reg clk_out
+module ClockDivider_1MHz (
+	input wire clk_in, // 100MHz
+	output reg clk_out // 1MHz
 );
 
-reg [24:0] cnt;
-
-initial begin
-	clk_out <= 1'b0;
-end
+reg [6:0] cnt = 7'h0;
+wire pulse = (cnt == 99);
 
 always @(posedge clk_in) begin
-	if (cnt == 25'h1FFFFF) begin
-		cnt = 0;
-		clk_out = ~clk_out;
-	end else begin
-		cnt = cnt + 1;
+	if (pulse) begin
+		cnt <= 7'h0;
+		clk_out <= ~clk_out;
+	end
+	else begin
+		cnt <= cnt + 1;
 	end
 end
 
 endmodule
 
 module ClockDivider_60Hz ( // From => 1MHz
-	input wire clk_in,
-	output reg clk_out
+	input wire clk_in, // 100MHz
+	output reg clk_out // 1Hz
 );
 
-reg [23:0] cnt;
+reg [21:0] cnt = 22'b0;
+wire pulse = (cnt == 1666667);
 
 always @(posedge clk_in) begin
-	if (cnt == 24'h41A1A - 1) begin
-		cnt = 24'b0;
-		clk_out = ~clk_out;
+	if (pulse) begin
+		cnt <= 22'b0;
+		clk_out <= ~clk_out;
 	end else begin
-		cnt = cnt + 1;
+		cnt <= cnt + 1;
 	end
 end 
 
